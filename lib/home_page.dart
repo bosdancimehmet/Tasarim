@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
+import 'package:firebase_auth/firebase_auth.dart'; 
 import 'waste_history_page.dart';
-import 'waste_data.dart'; // Ortak veriyi dahil ettik
+import 'waste_data.dart';
+import 'main.dart'; 
+import 'account_settings_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -22,11 +25,10 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     // Sayfa içerikleri
-    // HomeContent'e sayfayı yenilemesi için bir fonksiyon (onRefresh) gönderiyoruz
     final List<Widget> pages = [
-      HomeContent(onRefresh: () => setState(() {})), 
+      HomeContent(onRefresh: () => setState(() {})),
       const CameraPlaceholder(),
-      const ProfileContent(),
+      const ProfileContent(), 
     ];
 
     return Scaffold(
@@ -64,19 +66,17 @@ class _HomePageState extends State<HomePage> {
 
 // --- ANA SAYFA İÇERİĞİ ---
 class HomeContent extends StatelessWidget {
-  final VoidCallback onRefresh; // Sayfayı yenilemek için gerekli fonksiyon
-  
+  final VoidCallback onRefresh;
+
   const HomeContent({super.key, required this.onRefresh});
 
   @override
   Widget build(BuildContext context) {
-    // 3. ADIM: Verileri global dosyadan okuyup topluyoruz
     int totalCount = 0;
     globalWasteData.forEach((key, value) {
       totalCount += (value['count'] as int);
     });
 
-    // 4. ADIM: Yüzdeyi global hedefe göre hesaplıyoruz
     double progressPercent = (totalCount / (globalTargetCount > 0 ? globalTargetCount : 1)).clamp(0.0, 1.0);
 
     return SingleChildScrollView(
@@ -132,16 +132,15 @@ class HomeContent extends StatelessWidget {
           ),
           const SizedBox(height: 30),
 
-          // --- ÇEVRESEL KAZANIMLAR (DİNAMİK) ---
+          // --- ÇEVRESEL KAZANIMLAR ---
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text("Çevresel Kazanımlarım", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               TextButton(
                 onPressed: () {
-                  // Detay sayfasına git ve DÖNDÜĞÜNDE ekranı yenile
                   Navigator.push(context, MaterialPageRoute(builder: (context) => const WasteHistoryPage())).then((_) {
-                    onRefresh(); 
+                    onRefresh();
                   });
                 },
                 child: const Text("Tümünü Gör >", style: TextStyle(color: Colors.green)),
@@ -165,15 +164,12 @@ class HomeContent extends StatelessWidget {
               ),
               child: Column(
                 children: [
-                  // --- ÖZEL ARC WIDGET (ARTIK DİNAMİK) ---
                   ArcProgressBar(
-                    percentage: progressPercent, 
+                    percentage: progressPercent,
                     value: "$totalCount",
                     label: "ADET",
                   ),
-                  
                   const SizedBox(height: 30),
-                  
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -230,16 +226,19 @@ class CameraPlaceholder extends StatelessWidget {
   }
 }
 
-// --- 3. PROFİL SAYFASI (SADELEŞTİRİLMİŞ HALİ) ---
+// --- 3. PROFİL SAYFASI ---
 class ProfileContent extends StatelessWidget {
   const ProfileContent({super.key});
 
   @override
   Widget build(BuildContext context) {
+    // Firebase'den mevcut kullanıcıyı alıyoruz
+    final user = FirebaseAuth.instance.currentUser;
+
     return SingleChildScrollView(
       child: Column(
         children: [
-          // 1. ÜST BAŞLIK (Profil Fotosu ve İsim) - AYNI KALDI
+          // 1. ÜST BAŞLIK (Profil Fotosu ve Dinamik İsim)
           Container(
             padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
             decoration: BoxDecoration(
@@ -279,31 +278,64 @@ class ProfileContent extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 15),
-                const Text(
-                  "Emre Tekin",
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
+                // --- DİNAMİK İSİM ---
+                Text(
+                  user?.displayName ?? "Kullanıcı", // Kullanıcı adı yoksa "Kullanıcı" yazar
+                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
                 ),
                 const SizedBox(height: 5),
+                // --- DİNAMİK EMAİL ---
                 Text(
-                  "deneme@gmail.com",
+                  user?.email ?? "E-posta bulunamadı",
                   style: TextStyle(fontSize: 14, color: Colors.green[100]),
                 ),
               ],
             ),
           ),
-          
-          const SizedBox(height: 30), // Boşluğu biraz artırdık çünkü aradaki kartlar gitti
-          
-          // 2. MENÜ SEÇENEKLERİ (SADELEŞTİRİLDİ)
+
+          const SizedBox(height: 30),
+
+          // 2. MENÜ SEÇENEKLERİ
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Column(
               children: [
-                _buildMenuOption(Icons.settings_outlined, "Hesap Ayarları"),
-                // "Geri Dönüşüm Geçmişi" ve "Sıralama" buradan silindi.
+                // --- 2.Hesap Ayarları Linki ---
+                _buildMenuOption(
+                  Icons.settings_outlined, 
+                  "Hesap Ayarları",
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const AccountSettingsPage()),
+                    ).then((_) {
+                      // Geri dönünce sayfayı yeniliyoruz ki isim değişsin
+                      (context as Element).markNeedsBuild();
+                    });
+                  }
+                ),
+                
                 _buildMenuOption(Icons.help_outline, "Yardım & Destek"),
                 const Divider(height: 30),
-                _buildMenuOption(Icons.logout, "Çıkış Yap", isDestructive: true),
+                
+                // --- ÇIKIŞ YAP BUTONU ---
+                _buildMenuOption(
+                  Icons.logout, 
+                  "Çıkış Yap", 
+                  isDestructive: true,
+                  onTap: () async {
+                    // Firebase'den çıkış yap
+                    await FirebaseAuth.instance.signOut();
+                    
+                    // Giriş ekranına yönlendir ve geçmişi temizle
+                    if (context.mounted) {
+                       Navigator.of(context).pushAndRemoveUntil(
+                        MaterialPageRoute(builder: (context) => const AuthScreen()),
+                        (route) => false,
+                      );
+                    }
+                  }
+                ),
               ],
             ),
           ),
@@ -313,8 +345,8 @@ class ProfileContent extends StatelessWidget {
     );
   }
 
-  // Menü oluşturucu (İstatistik oluşturucu silindi çünkü artık kullanılmıyor)
-  Widget _buildMenuOption(IconData icon, String title, {bool isDestructive = false}) {
+  // Menü oluşturucu 
+  Widget _buildMenuOption(IconData icon, String title, {bool isDestructive = false, VoidCallback? onTap}) {
     return Container(
       margin: const EdgeInsets.only(bottom: 15),
       decoration: BoxDecoration(
@@ -336,7 +368,7 @@ class ProfileContent extends StatelessWidget {
           style: TextStyle(fontWeight: FontWeight.w600, color: isDestructive ? Colors.red : Colors.black87),
         ),
         trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
-        onTap: () {},
+        onTap: onTap ?? () {}, 
       ),
     );
   }
@@ -344,7 +376,7 @@ class ProfileContent extends StatelessWidget {
 
 // --- GRAFİK ÇİZİM SINIFLARI ---
 class ArcProgressBar extends StatelessWidget {
-  final double percentage; 
+  final double percentage;
   final String value;
   final String label;
 

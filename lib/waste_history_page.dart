@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'waste_data.dart'; // Ortak veriyi dahil ettik
+import 'waste_data.dart';
 
 class WasteHistoryPage extends StatefulWidget {
   const WasteHistoryPage({super.key});
